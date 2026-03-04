@@ -25,23 +25,75 @@ public class ExpenseService {
         User user = userRepository.findById(String.valueOf(UUID.fromString(userId)))
                 .orElseThrow(() -> new RuntimeException("Usuário não encontrado"));
 
-        // 2. Verifica se tem saldo (Opcional, mas recomendado)
+
         if (user.getSaldo().compareTo(amount) < 0) {
             throw new RuntimeException("Saldo insuficiente para esta despesa");
         }
 
-        // 3. Cria a despesa
+
         Expense expense = Expense.builder()
                 .amount(amount)
                 .description(description)
                 .user(user)
                 .build();
 
-        // 4. Atualiza o saldo do usuário
+
         user.setSaldo(user.getSaldo().subtract(amount));
         userRepository.save(user);
 
-        // 5. Salva e retorna a despesa
+
         return expenseRepository.save(expense);
+    }
+
+    @Transactional // Importante para operações de escrita/deleção
+    public void deletarDespesa(String idUser, String idExpense) {
+        // 1. Verificamos se o usuário existe
+        if (!userRepository.existsById(idUser)) {
+            throw new RuntimeException("Usuário não encontrado");
+        }
+
+
+        Expense exp = expenseRepository.findById(idExpense)
+                .orElseThrow(() -> new RuntimeException("Despesa não encontrada"));
+
+
+        if (!exp.getUser().getId().equals(idUser)) {
+            throw new RuntimeException("Você não tem permissão para deletar esta despesa");
+        }
+
+
+        expenseRepository.delete(exp);
+    }
+    @Transactional
+    public Expense alterarDespesa(String idUser, String idExpense, Expense dadosAtualizados) {
+
+        Expense exp = expenseRepository.findById(idExpense)
+                .orElseThrow(() -> new RuntimeException("Despesa não encontrada"));
+
+
+        if (!exp.getUser().getId().equals(idUser)) {
+            throw new RuntimeException("Ação não permitida!");
+        }
+
+
+        User user = exp.getUser();
+
+
+        BigDecimal saldoComExtorno = user.getSaldo().add(exp.getAmount());
+        BigDecimal saldoFinal = saldoComExtorno.subtract(dadosAtualizados.getAmount());
+
+
+        if (saldoFinal.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("Saldo insuficiente para esta alteração.");
+        }
+
+
+        exp.setDescription(dadosAtualizados.getDescription());
+        exp.setAmount(dadosAtualizados.getAmount());
+
+        user.setSaldo(saldoFinal);
+
+
+        return expenseRepository.save(exp);
     }
 }
